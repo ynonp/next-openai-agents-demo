@@ -1,21 +1,40 @@
+import { Agent, run } from '@openai/agents';
+
+const agent = new Agent({
+  name: 'Assistant',
+  instructions: 'You are a helpful assistant',
+});
+
 export async function POST() {
-  const encoder = new TextEncoder();
-  const customReadable = new ReadableStream({
+  const result = await run(agent, 'Tell me a story about a cat.', {
+    stream: true,
+  });
+
+  // Convert the result to a standard ReadableStream
+  const stream = new ReadableStream({
     async start(controller) {
-      controller.enqueue(encoder.encode('Processing...'));
-      await new Promise(resolve => setTimeout(resolve, 1000)); // Simulate delay
-      controller.enqueue(encoder.encode('Verifying hash...'));
-      await new Promise(resolve => setTimeout(resolve, 1500));
-      controller.enqueue(encoder.encode('Scanning file...'));
-      await new Promise(resolve => setTimeout(resolve, 2000));
-      controller.enqueue(encoder.encode('Generating link...'));
-      controller.close(); // Signal end of stream
+      const encoder = new TextEncoder();
+      
+      try {
+        for await (const event of result) {
+          if (event.type === 'raw_model_stream_event') {
+            if (event.data.type === "output_text_delta") {
+              controller.enqueue(encoder.encode(event.data.delta));
+            }                        
+          }          
+        }
+      } catch (error) {
+        controller.error(error);
+      } finally {
+        controller.close();
+      }
     },
   });
 
-  return new Response(customReadable, {
+  return new Response(stream, {
     headers: {
-      'Content-Type': 'text/plain',
+      'Content-Type': 'text/plain; charset=utf-8',
+      'Transfer-Encoding': 'chunked',
     },
   });
 }
