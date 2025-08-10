@@ -1,15 +1,28 @@
 'use client';
 import { FormEvent, useState } from "react";
 
-export default function Home() {
-  const [streamedText, setStreamedText] = useState('');
+type Message = {role: string, content: string };
 
-  async function startStreaming(ev: FormEvent) {
+export default function Home() {
+  const [messages, setMessages] = useState<Array<Message>>([]);
+
+  async function sendMessage(ev: FormEvent) {
     ev.preventDefault();
+    const form = ev.target as HTMLFormElement;
+    const fd = new FormData(form);
+
+    const userMessage = { role: 'user', content: fd.get('message') as string };
+    setMessages(prev => [...prev,
+      userMessage,
+      { role: 'assistant', content: '' }
+    ]);
+    
+    form.reset();
 
     try {
       const response = await fetch('/chat', {
-        method: "POST"
+        method: "POST",
+        body: JSON.stringify([...messages, userMessage]),
       });
       const reader = response.body!.getReader();
       const decoder = new TextDecoder();
@@ -17,20 +30,26 @@ export default function Home() {
       while (true) {
         const { done, value } = await reader.read();
         if (done) break;
-        setStreamedText(prev => prev + decoder.decode(value));
+        setMessages(prev => prev.with(-1, {
+          content: prev.at(-1)!.content + decoder.decode(value),
+          role: prev.at(-1)!.role,
+        }));
       }
     } catch (error) {
       console.error('Streaming error:', error);
     }
-    setStreamedText(prev => prev + 'Done!');
   }
 
   return (
     <div >
       <main >
-        <p>{streamedText}</p>
-        <form onSubmit={startStreaming}>
-          <input type="text" />
+        <ul>
+          {messages.map(msg => (
+            <li>{msg.role}: {msg.content}</li>
+          ))}
+        </ul>
+        <form onSubmit={sendMessage}>
+          <input type="text" name="message" />
           <input type="submit" value="Send" />
         </form>
       </main>

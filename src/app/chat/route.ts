@@ -1,12 +1,19 @@
-import { Agent, run } from '@openai/agents';
+import { Agent, run, user, assistant } from '@openai/agents';
 
 const agent = new Agent({
   name: 'Assistant',
   instructions: 'You are a helpful assistant',
 });
 
-export async function POST() {
-  const result = await run(agent, 'Tell me a story about a cat.', {
+export async function POST(request: Request) {
+  const messages = await request.json();
+
+  const messagesForAgent = messages.map((m: any) => 
+    (m.role === 'user' ? user(m.content) : assistant(m.content)))
+
+  console.log(messagesForAgent);
+
+  const result = await run(agent, messagesForAgent, {
     stream: true,
   });
 
